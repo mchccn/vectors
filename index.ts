@@ -82,15 +82,12 @@ type ApplyOptions<
     T,
     C extends Components,
     O extends CreateVectorOptions<C>
-> = Omit<
-    T,
+> = O["exclude"] extends "*"
+    ? CreateVectorConstructor<VectorStruct<C, O>, C> 
     //@ts-ignore
-    O["exclude"] extends undefined | unknown
-        ? ArrayToUnion<O["exclude"]>
-        : O["exclude"] extends "*"
-            //@ts-ignore
-            ? Methods<CreateVector<C, O>>
-            : ArrayToUnion<O["exclude"]>
+    : Omit<
+        T,
+        ArrayToUnion<O["exclude"]>
     > & CreateVectorConstructor<VectorStruct<C, O>, C>;
 
 type CreateVectorConstructor<T, C extends Components> = {
@@ -110,9 +107,7 @@ type CreateVector<C extends Components, O extends CreateVectorOptions<C>> = Vect
     max: (vector: T) => number;
     min: (vector: T) => number;
     equals: (a: T, b: T) => boolean;
-    toAngles: (vector: T) => CreateArray<number, Decrement<C>>;
     toArray: (vector: T) => CreateArray<number, Decrement<C>>;
-    cross: (a: T, b: T) => T;
     normalize: (vector: T) => T;
     negate: (vector: T) => T;
     clone: (vector: T) => T;
@@ -127,14 +122,11 @@ type CreateVector<C extends Components, O extends CreateVectorOptions<C>> = Vect
 type VectorStruct<
     C extends Components,
     O extends CreateVectorOptions<C>
-> = Omit<
-    StaticVectorStruct<C, O>,
-    //@ts-ignore
-    O["exclude"] extends undefined | unknown
-        ? ArrayToUnion<O["exclude"]>
-        : O["exclude"] extends "*"
-            ? Methods<StaticVectorStruct<C, O>>
-            : ArrayToUnion<O["exclude"]>
+> = O["exclude"] extends "*" ? {
+        [N in GetCanonicalAxisNames<C>[number]]: number;
+    } : Omit<
+        StaticVectorStruct<C, O>,
+        ArrayToUnion<O["exclude"]>
     >;
 
 type StaticVectorStructMethods<C extends Components, O extends CreateVectorOptions<C>> = {
@@ -145,9 +137,7 @@ type StaticVectorStructMethods<C extends Components, O extends CreateVectorOptio
     max: () => number;
     min: () => number;
     equals: (vector: StaticVectorStruct<C, O>) => boolean;
-    toAngles: () => CreateArray<number, Decrement<C>>;
     toArray: () => CreateArray<number, Decrement<C>>;
-    cross: (vector: VectorStruct<C, O>) => VectorStruct<C, O>;
     normalize: () => VectorStruct<C, O>;
     negate: () => VectorStruct<C, O>;
     clone: () => VectorStruct<C, O>;
@@ -169,9 +159,6 @@ type CreateVectorOptions<C extends Components> = {
 };
 
 type VectorConstructor<C extends Components, O extends CreateVectorOptions<C>> = ApplyOptions<CreateVector<C, O>, C, O>;
-
-type First<A> = A extends [infer First, ...infer _] ? First : never;
-type Rest<A> = A extends [infer _, ...infer Rest] ? Rest : [];
 
 function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOptions<C> = { exclude: []; immutable: false; }>(components: C, options?: O): VectorConstructor<C, O> {
     const { exclude, immutable }: Required<CreateVectorOptions<C>> = {
@@ -265,7 +252,6 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
         public max!: () => number;
         public min!: () => number;
         public equals!: (vector: VectorStruct<C, O>) => boolean;
-        public toAngles!: () => CreateArray<number, Decrement<C>>;
         public toArray!: () => CreateArray<number, Decrement<C>>;
         public cross!: (vector: VectorStruct<C, O>) => VectorStruct<C, O>;
         public normalize!: () => VectorStruct<C, O>;
@@ -277,18 +263,10 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
     if (exclude !== "*") {
         Object.entries(
             {
-                add: (vector, axis, value) => {
-                    vector[axis as Axis<C>] += value;
-                },
-                subtract: (vector, axis, value) => {
-                    vector[axis as Axis<C>] -= value;
-                },
-                multiply: (vector, axis, value) => {
-                    vector[axis as Axis<C>] *= value;
-                },
-                divide: (vector, axis, value) => {
-                    vector[axis as Axis<C>] /= value;
-                },
+                add: (vector, axis, value) => void (vector[axis as Axis<C>] += value),
+                subtract: (vector, axis, value) => void (vector[axis as Axis<C>] -= value),
+                multiply: (vector, axis, value) => void (vector[axis as Axis<C>] *= value),
+                divide: (vector, axis, value) => void (vector[axis as Axis<C>] /= value),
             } as Record<Functions, (vector: { [N in GetCanonicalAxisNames<C>[number]]: number; }, axis: typeof axes[number], value: number) => void>
         ).filter(([fn]) => !exclude.includes(fn as typeof exclude[number])).forEach(([fn, exec]) => {
             Vector.prototype[fn as Functions] = function (...args: 
@@ -359,13 +337,13 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
             }
         });
 
-        type BindToVector<T extends Record<string, (...args: any[]) => any>> = { [K in keyof T]: (this: Vector, ...args: Parameters<T[K]>) => ReturnType<T[K]>; };
+        type BindToVector<T extends Record<string, (...args: any[]) => any>> = { [K in keyof T]: (this: StaticVectorStruct<C, O> & { [A in Axis<Components>]: number }, ...args: Parameters<T[K]>) => ReturnType<T[K]>; };
 
         Object.entries({
             dot(vector) {
                 return (Object.keys(vector) as typeof axes[number][]).filter(
                         (key) => axes.includes(key)
-                ).reduce((product, axis) => product + this[axis] * (vector[axis as keyof typeof vector] ?? 0), 0);
+                ).reduce((product, axis) => product + this[axis] * (vector[axis as Axis<C>] ?? 0), 0);
             },
             angleTo(vector) {
                return Math.acos(this.dot(vector) / this.magnitude() * vector.magnitude());
@@ -375,8 +353,40 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
                         (key) => axes.includes(key)
                 ).reduce((product, axis) => product + this[axis] * this[axis], 0), 1 / components);
             },
+            length() {
+                return this.magnitude();
+            },
+            max() {
+                return Math.max(...(Object.entries(this) as [typeof axes[number], number][]).filter(([key]) => axes.includes(key)).map(([, v]) => v));
+            },
+            min() {
+                return Math.min(...(Object.entries(this) as [typeof axes[number], number][]).filter(([key]) => axes.includes(key)).map(([, v]) => v));
+            },
+            equals(vector) {
+                return (Object.keys(vector) as typeof axes[number][]).filter(
+                        (key) => axes.includes(key)
+                ).every((key) => this[key] === vector[key as Axis<C>]);
+            },
+            toArray() {
+                return (Object.keys(this) as typeof axes[number][]).filter(
+                        (key) => axes.includes(key)
+                ).sort((a, b) => axes.indexOf(a) - axes.indexOf(b)).map((key) => this[key]) as CreateArray<number, Decrement<C>>;
+            },
+            normalize() {
+                return this.divide(this.magnitude());                    
+            },
+            negate() {
+                return this.multiply(-1);
+            },
             clone() {
                 return new Vector(this);
+            },
+            toPoint() {
+                return Object.fromEntries(
+                    (Object.entries(this) as [typeof axes[number], number][]).filter(
+                        ([key]) => axes.includes(key)
+                    )
+                ) as { [N in GetCanonicalAxisNames<C>[number]]: number; };  
             },
         } as Partial<BindToVector<StaticVectorStructMethods<C, O>>>).filter(([m]) => !exclude.includes(m as typeof exclude[number])).forEach(([method, fn]) => {
             Object.defineProperty(Vector.prototype, method, {
@@ -391,10 +401,4 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
     return Vector as unknown as VectorConstructor<C, O>;
 }
 
-const Vector = create(3);
-
-Vector
-
-const v = new Vector(4, 4, 4);
-
-console.log(v.dot(new Vector(3, 3, 3)));
+export default create;
