@@ -1,6 +1,6 @@
 {
     "name": "@cursorsdottsx/vectors",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Over-engineered, multi-dimensional and firmly typed vector creation library.",
     "main": "index.js",
     "scripts": {},
