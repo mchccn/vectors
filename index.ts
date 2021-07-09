@@ -103,7 +103,6 @@ type CreateVector<C extends Components, O extends CreateVectorOptions<C>> = Vect
     dot: (a: T, b: T) => number;
     angleTo: (a: T, b: T) => number;
     magnitude: (vector: T) => number;
-    length: (vector: T) => number;
     max: (vector: T) => number;
     min: (vector: T) => number;
     equals: (a: T, b: T) => boolean;
@@ -258,6 +257,24 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
         public negate!: () => VectorStruct<C, O>;
         public clone!: () => VectorStruct<C, O>;
         public toPoint!: () => { [N in GetCanonicalAxisNames<C>[number]]: number; };
+
+        public static add: unknown;
+        public static subtract: unknown;
+        public static multiply: unknown;
+        public static divide: unknown;
+
+        public static dot: (a: VectorStruct<C, O>, b: VectorStruct<C, O>) => number;
+        public static angleTo: (a: VectorStruct<C, O>) => number;
+        public static magnitude: (vector: VectorStruct<C, O>) => number;
+        public static max: (vector: VectorStruct<C, O>) => number;
+        public static min: (vector: VectorStruct<C, O>) => number;
+        public static equals: (a: VectorStruct<C, O>, b: VectorStruct<C, O>) => boolean;
+        public static toArray: (vector: VectorStruct<C, O>) => CreateArray<number, Decrement<C>>;
+        public static cross: (a: VectorStruct<C, O>, b: VectorStruct<C, O>) => VectorStruct<C, O>;
+        public static normalize: (vector: VectorStruct<C, O>) => VectorStruct<C, O>;
+        public static negate: (vector: VectorStruct<C, O>) => VectorStruct<C, O>;
+        public static clone: (vector: VectorStruct<C, O>) => VectorStruct<C, O>;
+        public static toPoint: (vector: VectorStruct<C, O>) => { [N in GetCanonicalAxisNames<C>[number]]: number; };
     }
 
     if (exclude !== "*") {
@@ -393,7 +410,20 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
                 value(...args: any[]) { return (fn as Function).apply(this, args); },
                 writable: true,
                 configurable: true,
-                enumerable: false,
+                enumerable: true,
+            });
+        });
+
+        Object.keys(Vector.prototype).forEach((method) => {
+            Object.defineProperty(Vector, method, {
+                value(...args: any[]) {
+                    if (args.length === 2) return args[0][method](args[1]);
+
+                    return args[0][method]();
+                },
+                writable: true,
+                configurable: true,
+                enumerable: true,
             });
         });
     }
