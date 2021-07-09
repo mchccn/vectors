@@ -402,3 +402,5 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
 }
 
 export default create;
+module.exports = create;
+exports.default = create;
