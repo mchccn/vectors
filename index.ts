@@ -366,9 +366,9 @@ function create<C extends Exclude<Components, -1 | 0>, O extends CreateVectorOpt
                return Math.acos(this.dot(vector) / this.magnitude() * vector.magnitude());
             },
             magnitude() {
-                return Math.pow((Object.keys(this) as typeof axes[number][]).filter(
+                return Math.sqrt((Object.keys(this) as typeof axes[number][]).filter(
                         (key) => axes.includes(key)
-                ).reduce((product, axis) => product + this[axis] * this[axis], 0), 1 / components);
+                ).reduce((product, axis) => product + this[axis] * this[axis], 0));
             },
             length() {
                 return this.magnitude();
